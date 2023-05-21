@@ -20,7 +20,7 @@ class RemoteChatGLM(LLM):
             raise ValueError("stop kwargs are not permitted.")
         request = {
             "prompt": prompt,
-            "history": []
+            "history": [],
         }
         resp = requests.post(self.remote_host, json=request)
         assert resp.ok
