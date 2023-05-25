@@ -1,11 +1,9 @@
 """Ask a question to the notion database."""
-import faiss
-from langchain import OpenAI, PromptTemplate
-from langchain.chains import VectorDBQAWithSourcesChain
-import pickle
 import argparse
 
-from remote_chatglm import RemoteChatGLM
+from langchain import OpenAI, PromptTemplate, FAISS
+from langchain.chains import RetrievalQAWithSourcesChain
+from langchain.embeddings import OpenAIEmbeddings
 
 question_prompt_template = """#zh-tw
 根據下列文件回答問題。 
@@ -53,19 +51,16 @@ parser.add_argument('question', type=str, help='The question to ask')
 args = parser.parse_args()
 
 # Load the LangChain.
-index = faiss.read_index("docs.index")
+embeddings = OpenAIEmbeddings()
+store = FAISS.load_local("docs.index", embeddings)
+retriever = store.as_retriever(search_type="mmr")
 
-with open("faiss_store.pkl", "rb") as f:
-    store = pickle.load(f)
-
-store.index = index
-chain = VectorDBQAWithSourcesChain.from_llm(
-    # llm=OpenAI(temperature=0),
-    llm=RemoteChatGLM(),
+chain = RetrievalQAWithSourcesChain.from_llm(
+    llm=OpenAI(temperature=0),
+    # llm=RemoteChatGLM(),
     question_prompt=QUESTION_PROMPT,
     combine_prompt=COMBINE_PROMPT,
-    vectorstore=store,
-    k=2
+    retriever=retriever
 )
 
 result = chain({"question": args.question})

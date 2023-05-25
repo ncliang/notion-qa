@@ -1,36 +1,29 @@
 """This is the logic for ingesting Notion data into LangChain."""
 from pathlib import Path
-from langchain.text_splitter import CharacterTextSplitter
-import faiss
-from langchain.vectorstores import FAISS
-from langchain.embeddings import OpenAIEmbeddings
-import pickle
 
+from langchain.document_loaders import TextLoader
+from langchain.embeddings import OpenAIEmbeddings
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain.vectorstores import FAISS
 
 # Here we load in the data in the format that Notion exports it in.
 # ps = list(Path("Notion_DB/").glob("**/*.md"))
 ps = list(Path("ctbc/").glob("**/*.txt"))
-data = []
-sources = []
+documents = []
 for p in ps:
-    with open(p) as f:
-        data.append(f.read())
-    sources.append(p)
+    loader = TextLoader(p)
+    documents.extend(loader.load())
+
 
 # Here we split the documents, as needed, into smaller chunks.
 # We do this due to the context limits of the LLMs.
-text_splitter = CharacterTextSplitter(chunk_size=1500, separator="\n")
-docs = []
-metadatas = []
-for i, d in enumerate(data):
-    splits = text_splitter.split_text(d)
-    docs.extend(splits)
-    metadatas.extend([{"source": sources[i]}] * len(splits))
+text_splitter = RecursiveCharacterTextSplitter(chunk_size=200)
+docs = text_splitter.split_documents(documents)
 
+embeddings = OpenAIEmbeddings()
 
 # Here we create a vector store from the documents and save it to disk.
-store = FAISS.from_texts(docs, OpenAIEmbeddings(), metadatas=metadatas)
-faiss.write_index(store.index, "docs.index")
-store.index = None
-with open("faiss_store.pkl", "wb") as f:
-    pickle.dump(store, f)
+db = FAISS.from_documents(docs, embeddings)
+
+db.save_local("docs.index")
+
